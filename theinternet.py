@@ -1,13 +1,15 @@
+import re
+import json
+import requests
 import urllib.parse
 from secrets import Secrets
 import TwitterSearch
-
 
 def run_search():
     sources = []
     try:
         tso = TwitterSearch.TwitterSearchOrder()
-        tso.set_search_url("?%s" % urllib.parse.urlencode({"q":SEARCH_TERM}))
+        tso.set_search_url("?%s" % urllib.parse.urlencode({"q":"\"%s\"" % SEARCH_TERM}))
         tso.set_locale('en')
         tso.set_count(NUMBER_OF_TWEETS) #smallest request that might work
         tso.set_include_entities(False)
@@ -35,16 +37,39 @@ def run_search():
     return sources
 
 def parse_results(search_results):
-    return []
 
-def log_results(parsed_results):
-    pass
+    regex = re.sub('\*', '([\\w\'\\-]+)', SEARCH_TERM)
+    result = []
+    for source in search_results:
+        match = re.search(regex, source, re.IGNORECASE)
+        if match:
+            result.append(match.groups()[0].lower())
+            #assumption: there was exactly one match
+    return result
+
+def get_sentiments(parsed_results):
+    print(parsed_results)
+    sentiments = []
+    for word in parsed_results:
+        params = {'text': word}
+        response = requests.post('http://text-processing.com/api/sentiment/', data={'text':word})
+        result = response.json()['probability']
+
+        if result['pos'] > result['neg']:
+            sentiments.append(result['pos'])
+        else:
+            sentiments.append(result['neg'] * -1)
+
+    average = float(sum(sentiments)/len(sentiments))
+    print(average)
 
 
 
-SEARCH_TERM = '"the internet is a * place"'
-NUMBER_OF_TWEETS = 50
+
+
+SEARCH_TERM = 'the internet is a * place'
+NUMBER_OF_TWEETS = 15
 
 search_results = run_search()
 parsed_results = parse_results(search_results)
-log_results(parsed_results)
+sentiments = get_sentiments(parsed_results)
